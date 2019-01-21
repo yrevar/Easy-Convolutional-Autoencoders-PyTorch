@@ -22,6 +22,7 @@ class ConvAE(nn.Module):
                "conv-strided1": lambda D_in, D_out: nn.Conv2d(D_in, D_out, kernel_size=3, 
                                                               stride=2, padding=1, bias=False),
                "batch-norm1": lambda D_in: nn.BatchNorm2d(D_in),
+               "sigmoid1": nn.Sigmoid,
                
                "de-conv1": lambda D_in, D_out: nn.ConvTranspose2d(D_in, D_out, kernel_size=3, stride=1, padding=1, bias=False),
                "de-relu1": nn.ReLU,
@@ -31,6 +32,7 @@ class ConvAE(nn.Module):
                "de-conv-strided1": lambda D_in, D_out: nn.ConvTranspose2d(D_in, D_out, kernel_size=3, 
                                                                           stride=2, padding=1, bias=False),
                "de-batch-norm1": lambda D_in: nn.BatchNorm2d(D_in),
+               "de-sigmoid1": nn.Sigmoid,
               }
     
     def __init__(self, input_dim, 
@@ -274,10 +276,16 @@ class ConvAE(nn.Module):
         elif layer_name.startswith("relu") or layer_name.startswith("de-relu"):
 
             return layer_fn(), layer_name, input_dim
+        
+        elif layer_name.startswith("sigmoid") or layer_name.startswith("de-sigmoid"):
+
+            return layer_fn(), layer_name, input_dim
+        
         elif layer_name.startswith("batch-norm") or layer_name.startswith("de-batch-norm"):
             D, H, W = input_dim
             layer = layer_fn(D)
             return layer, layer_name, input_dim
+        
         else:
             raise NotImplementedError("Layer {} not supported!".format(layer_name))
             
