@@ -21,6 +21,7 @@ class ConvAE(nn.Module):
                "flatten1": Reshape,
                "conv-strided1": lambda D_in, D_out: nn.Conv2d(D_in, D_out, kernel_size=3, 
                                                               stride=2, padding=1, bias=False),
+               "batch-norm1": lambda D_in: nn.BatchNorm2d(D_in),
                
                "de-conv1": lambda D_in, D_out: nn.ConvTranspose2d(D_in, D_out, kernel_size=3, stride=1, padding=1, bias=False),
                "de-relu1": nn.ReLU,
@@ -29,6 +30,7 @@ class ConvAE(nn.Module):
                "de-flatten1": Reshape,
                "de-conv-strided1": lambda D_in, D_out: nn.ConvTranspose2d(D_in, D_out, kernel_size=3, 
                                                                           stride=2, padding=1, bias=False),
+               "de-batch-norm1": lambda D_in: nn.BatchNorm2d(D_in),
               }
     
     def __init__(self, input_dim, 
@@ -133,11 +135,11 @@ class ConvAE(nn.Module):
         
         return layers, layer_names, layer_dims
         
-    def encode(self, x, ret_pool_idxs=False, skip_layers=True):
+    def encode(self, x, ret_pool_idxs=False, skip_layers=False):
         
         pool_idxs = []
         self.enc_activations = []
-        if skip_layers:
+        if skip_layers and self.ae_skip_layers:
             layer_end = -self.ae_skip_layers
         else:
             layer_end = None
@@ -159,7 +161,7 @@ class ConvAE(nn.Module):
         else:
             return x
     
-    def decode(self, x, pool_idxs=None, skip_layers=True):
+    def decode(self, x, pool_idxs=None, skip_layers=False):
         
         self.dec_activations = []
         if skip_layers:
@@ -197,12 +199,6 @@ class ConvAE(nn.Module):
     def get_decoder_activations(self):
         return self.dec_activations
     
-#     def get_results_img(self, x, x_prime, nrows=8, padding=5):
-        
-#         return utils.make_grid(
-#             torch.stack((x.long(), x_prime.long()), dim=1).view(-1, *self.input_dim),
-#             nrow=nrows, padding=padding).permute(2, 1, 0).cpu().numpy().astype(np.uint8)
-
     def get_results_img(self, x, x_prime, nrow=8, padding=5):
         
         return utils.make_grid(
@@ -278,7 +274,10 @@ class ConvAE(nn.Module):
         elif layer_name.startswith("relu") or layer_name.startswith("de-relu"):
 
             return layer_fn(), layer_name, input_dim
-
+        elif layer_name.startswith("batch-norm") or layer_name.startswith("de-batch-norm"):
+            D, H, W = input_dim
+            layer = layer_fn(D)
+            return layer, layer_name, input_dim
         else:
             raise NotImplementedError("Layer {} not supported!".format(layer_name))
             
@@ -301,7 +300,7 @@ def pearson_corr_coeff(x, y):
     PearsonCorrCoeff = torch.sum(vx * vy) / (torch.sqrt(torch.sum(vx ** 2)) * torch.sqrt(torch.sum(vy ** 2)))
     return PearsonCorrCoeff
 
-def create_network(block, times, pooling_freq=3, strided_conv_freq=3, strided_conv_channels=16):
+def create_network(block, times, pooling_freq=3, strided_conv_freq=3, strided_conv_channels=16, batch_norm_freq=3):
     
     m = []
     block_len = len(block)
@@ -312,4 +311,6 @@ def create_network(block, times, pooling_freq=3, strided_conv_freq=3, strided_co
             m.extend([("pool1", None)])
         if i % strided_conv_freq == 0:
             m.extend([("conv-strided1", strided_conv_channels)])
+        if i % batch_norm_freq == 0:
+            m.extend([("batch-norm1", None)])
     return m
